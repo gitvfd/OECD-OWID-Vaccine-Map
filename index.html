@@ -321,9 +321,6 @@ function legendHelpers.thresholdLabels({
 				return k.id;
 			})
 			.attr('fill', function(d){
-				if(d.properties.display=="Yes")
-				 	return "#c6ccce";
-				else
 					return "#c6ccce";
 					
 			})
@@ -337,54 +334,6 @@ function legendHelpers.thresholdLabels({
 			.attr("d", path)
 			
 			
-		//var startDate = d3.min(long_data,function(d){return (d.date)});
-
-		/*polygonData=long_data
-		polygons = voronoi(polygonData.filter(function(k){ return formatDate((k.date))==formatDate(startDate)})).polygons();
-		voronoiLayer.selectAll(".cell")
-			.data(polygons)
-			.enter()
-			.append("path")
-			.attr("class", "cell")
-			.attr("fill", "none")
-			.style("pointer-events", "all")
-			.attr("stroke", "none")
-			.attr("d", function (d) { return "M" + d.join("L") + "Z"; })
-			.on('mouseover', function (d) {
-					d3.select("#" + d.data.ISO).style("opacity",0.3)
-					d3.select("#" + d.data.ISO).style("stroke","#171717")
-					d3.select("#" + d.data.ISO).style("stroke-width","2px")
-					divMap.transition()
-						.duration(0)
-						.style("opacity", 1);
-					
-					var htmlText = "<b>" + d.data.Country + "</b><br/><i>"+formatDate(d.data.date)+"</i><br/>consumer Barometer: <b>"+d.data.value+"</b>";
-					divMap.html(htmlText)
-						.style("left", event.pageX - document.body.scrollLeft + "px")
-						.style("top", event.pageY  + "px");
-			})
-			.on("mousemove", function (d) {
-
-				divMap
-					.style("left", event.pageX - document.body.scrollLeft + 10 + "px")
-					.style("top", event.pageY + "px");
-			})
-			.on('mouseout', function (d) {
-				
-				d3.select("#" + d.data.ISO).style("stroke",function(){
-					var basecolor="#c0c7c9";
-						if(d.data.value!="")
-							basecolor = colorScale(parseFloat(d.data.value))
-						if(d.data.value=="") 
-							basecolor ="#868b8c";
-						return basecolor;
-					})
-				d3.select("#" + d.data.ISO).style("opacity",1)
-				
-				divMap.transition()
-					.duration(100)
-					.style("opacity", 0);
-			})*/
 
 		updateMap(startDate)
 
@@ -396,112 +345,49 @@ function legendHelpers.thresholdLabels({
 		label
 			.attr("x", x(value))
 			.text(formatDate(value));
-console.log(long_data.some(item => formatDate((item.date))===formatDate(value)))
-if(long_data.some(item => formatDate((item.date))===formatDate(value))){
+console.log(formatDate(value))
+		if(long_data.some(item => formatDate((item.date))===formatDate(value))){
 
 
-		// update map 	
-		worldMap
-			.selectAll("path")
-			.data(worldData.features)
-			.transition().duration(250)
-			.attr("class", function (k) {
-				return "world ";
-			})
-			.attr("id", function (k) {
-				return k.id;
-			})
-			
-			.style('stroke', function(d){
-					var basecolor;
+			// update map 	
+			worldMap
+				.selectAll("path")
+				.data(worldData.features)
+				.transition().duration(250)
+				.attr("class", function (k) {
+					return "world ";
+				})
+				.attr("id", function (k) {
+					return k.id;
+				})
+				
+				.style('stroke', function(d){
+						var basecolor=  "#c6ccce"; 
+
+						long_data.forEach(function(k){
+
+							if(k.ISO== d.id && formatDate((k.date))==formatDate(value)){
+								if(d.value!="")
+									basecolor =colorScale(parseFloat(k.value))
+								
+							}
+						})
+					return basecolor;
+					})
+				.attr('fill', function (d) {
 					
-					if(d.properties.display=="Yes")
-						basecolor= "#c6ccce";
-					else
-						basecolor=  "#c6ccce"; 
+					var basecolor=  "#c6ccce"; 
 
 					long_data.forEach(function(k){
-
-						if(k.ISO== d.id && formatDate((k.date))==formatDate(value)){
-							if(d.value!="")
-								basecolor =colorScale(parseFloat(k.value))
-							
-						}
-					})
-				return basecolor;
+							if(k.ISO== d.id && formatDate((k.date))==formatDate(value)){
+								if(d.value!="")
+									basecolor =colorScale(parseFloat(k.value))
+							}
+						})
+					return basecolor;
 				})
-			.attr('fill', function (d) {
-				
-				var basecolor;
-				
-				if(d.properties.display=="Yes")
-				 	basecolor= "#c6ccce";
-				else
-					basecolor=  "#c6ccce"; 
+			}		
 
-				long_data.forEach(function(k){
-						if(k.ISO== d.id && formatDate((k.date))==formatDate(value)){
-							if(d.value!="")
-								basecolor =colorScale(parseFloat(k.value))
-						}
-					})
-				return basecolor;
-			})
-}		
-	/*polygons = voronoi(polygonData.filter(function(k){ return formatDate((k.date))==formatDate(value)})).polygons();
-	
-	voronoiLayer.selectAll(".cell").remove()
-
-	voronoiLayer.selectAll(".cell")
-			.data(polygons)
-			.enter()
-			.append("path")
-			.attr("class", "cell")
-			.attr("fill", "none")
-			.style("pointer-events", "all")
-			.attr("stroke", "none")
-			.attr("d", function (d) { return "M" + d.join("L") + "Z"; })
-
-		voronoiLayer.selectAll(".cell")
-				.on('mouseover', function (d) {
-					d3.select("#" + d.data.ISO).style("opacity",0.5)
-					d3.select("#" + d.data.ISO).style("stroke","#171717")
-					d3.select("#" + d.data.ISO).style("stroke-width","2px")
-						divMap.transition()
-							.duration(100)
-							.style("opacity", 1);
-						
-						var htmlText = "<b>" + d.data.Country + "</b><br/><i>"+formatDate(d.data.date)+"</i><br/>consumer Barometer: <b>"+d.data.value+"</b>";
-					divMap.html(htmlText)
-							.style("left", event.pageX - document.body.scrollLeft + "px")
-							.style("top", event.pageY  + "px");
-							
-					
-
-					})
-				
-				.on("mousemove", function (d) {
-
-					divMap
-						.style("left", event.pageX - document.body.scrollLeft + 10 + "px")
-						.style("top", event.pageY + "px");
-
-				})
-				.on('mouseout', function (d) {
-					d3.select("#" + d.data.ISO).style("stroke",function(){
-					var basecolor="#c0c7c9";
-						if(d.data.value!="")
-							basecolor = colorScale(parseFloat(d.data.value))
-						if(d.data.value=="") 
-							basecolor ="#868b8c";
-						return basecolor;
-					})
-					d3.select("#" + d.data.ISO).style("opacity",1)
-					
-					divMap.transition()
-						.duration(100)
-						.style("opacity", 0);
-				})*/
 		
 }
 
@@ -531,19 +417,6 @@ function resize() {
 		worldMap.selectAll('.world').attr('d', path);
 		//world.selectAll('.state').attr('d', path);
 
-
-
-		voronoi
-			.extent([[-1, -1], [width + 1, height + 1]]);
-
-		polygons = voronoi(polygonData).polygons();
-
-		voronoiLayer.selectAll(".cell")
-			.data(polygons)
-			.attr("fill", "none")
-			.style("pointer-events", "all")
-			.attr("stroke", "none")
-			.attr("d", function (d) { return "M" + d.join("L") + "Z"; })
 	}
 
 
@@ -559,7 +432,7 @@ playButton
 		button.text("Play");
 		} else {
 		moving = true;
-		timer = setInterval(step, 100);
+		timer = setInterval(step, 50);
 		button.text("Pause");
 		}
   })
@@ -567,7 +440,7 @@ playButton
   
 function step() {
   updateMap(x.invert(currentValue));
-  currentValue = currentValue + (15);
+  currentValue = currentValue + (5);
   if (currentValue > targetValue) {
 	  updateMap(endDate)
     moving = false;
