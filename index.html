@@ -1,0 +1,593 @@
+<doctype HTML>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<head>
+
+	<link href="https://fonts.googleapis.com/css?family=Noto+Sans:400,400i,700,700i|Oswald:200,300,400,500,600,700&display=swap&subset=latin-ext" rel="stylesheet">
+	<link rel="stylesheet" href="css/bootstrap.min.css">
+	<link rel="stylesheet" type="text/css" href="css/site.css">
+<script src="https://code.jquery.com/jquery-3.5.0.js" integrity="sha256-r/AaFHrszJtwpe+tHyNi/XCfMxYpbsRg2Uqn0x3s2zc="
+	crossorigin="anonymous"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
+	 
+<script src="libs/d3.v4.min.js"></script><script src="https://d3js.org/d3-dsv.v1.min.js"></script>
+	<script src="libs/d3.v4.jetpack.min.js"></script>
+	<script src="libs/d3-scale-chromatic.v1.min.js"></script>
+	<script src="libs/topojson.v1.min.js"></script>
+	<script src="libs/d3-queue.v3.min.js"></script>
+	<script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js" integrity="sha512-wNH6xsp2n8CfB91nrBtfc4sfLwYPBMjSWVUwQOp60AYYXH6i8yCwuKFZ4rgK2i6pQek/b+bSyR7b01/922IBzQ==" crossorigin="anonymous"></script>
+	<link rel="icon" href="img/favicon.ico" >
+
+
+
+
+</head>
+
+<body>
+
+	<h1>Vaccination speed differs widely</h1>
+	<div id="introPara">Total COVID-19 vaccine doses administered per 100 people
+</div>
+	<div id="slider">
+		  <button id="play-button">Play</button>
+	</div>
+
+	<div id="legend"></div>
+	<div id="aboutMap">
+	</div>
+	<div id="source">Source:  <a href="" target="_blank">Our World in Data</a></div>
+
+	<!--<div id="source"><b>Source</b>: <a href="https://dx.doi.org/10.1787/67ede41b-en" target="_blank">OECD Pensions Outlook 2020</a></div>-->
+
+
+</body>
+<script type="text/javascript">
+
+
+        function dateParser(d){
+            var splitted = d.split('/');
+            
+            return d3.timeParse('%d-%m-%Y')(splitted[1] + '-' + splitted[0] + '-' + splitted[2]);
+        }
+
+	var worldData, alldata;
+	var long_data = []; 
+
+	var startDate,endDate,lowest,hightest;
+
+	var urls = {
+	    world: "data/world.json",
+	    country:"data/coord_country.tsv",
+		data: "data/data.txt",
+		couList:"data/country-display.tsv"
+	};
+
+	var divMap = d3.select("body").append("div") 
+	    .attr("class", "tooltip")       
+		.style("opacity", 0);
+
+    var format = d3.format(",.1f");
+    var margin = 20,centered;
+
+	var mapRatio=0.41;
+	var mapScale;
+    
+    var width = document.getElementById("aboutMap").offsetWidth,
+    	height= width*mapRatio;
+	
+	var formatDateIntoYear = d3.timeFormat("%Y");
+	var formatDate = d3.timeFormat("%d-%b-%Y");
+	var formatInitDate = d3.timeFormat("%d-%m-%Y");
+	var parseDate = d3.timeParse("%d-%m-%Y");
+
+	//var colorScale = d3.scaleOrdinal(d3.schemeRdYlGn[9])
+	//  .domain([-2, 2]);
+
+	//var colorScale =d3.scaleSequential(d3.interpolateRdYlGn)
+var colorScale =d3.scaleThreshold()
+    .domain([0,1,5,10,20,40,60,80,300])
+    .range(["#c6ccce","#F7FBFF", "#DEEBF7", "#C6DBEF","#9ECAE1","#6BAED6","#4292C6","#2171B5","#084594"]);
+	
+	if(width>750)
+		mapScale= 6.7;
+	else
+		mapScale=6.3
+
+  	var projection = d3.geoRobinson()
+	    		.scale(width/mapScale)
+	    		.translate([width / 2, 5.7*height / 10])
+  	        	.precision(.01);
+
+  	var path = d3.geoPath()
+                     .projection(projection);
+
+  	var svg = d3.select("#aboutMap").append("svg")
+  	    .attr("width", width)
+  	    .attr("height", height)
+ 
+	var worldMap=svg.append("g")
+
+	
+
+	var heightSlider= 100;
+    var slider=d3.select("#slider").append("svg")
+  	    .attr("width", width)
+		  .attr("height", heightSlider).append("g").attr("class", "slider")
+    	.attr("transform", "translate(" + margin + "," + heightSlider/2 + ")");
+
+	var handle;
+	var label;		  
+	var moving = false;
+	var currentValue = 0;
+	var targetValue = width;
+	var playButton = d3.select("#play-button");
+	var x;
+
+	var heightLegend= 100;
+	var legend = d3.select("#legend").append("svg").attr("id","legendSVG")
+	.attr("width", width/2)
+	.attr("height", heightLegend)
+
+	var voronoiLayer = svg.append("g");
+
+	var voronoi = d3.voronoi()
+		.x(function (d) { return projection([d.lng, d.lat])[0]; })
+		.y(function (d) { return projection([d.lng, d.lat])[1]; })
+		.extent([[-1, -1], [width + 1, height + 1]]);
+	
+	var polygons;
+	var polygonData;
+	
+	const psv = d3.dsvFormat('|');
+
+	d3.queue()
+	    .defer(d3.json, urls.world)
+	    .defer(d3.tsv, urls.country)
+		.defer(d3.text, urls.data)
+		.defer(d3.tsv, urls.couList)
+	    .await(render);
+
+
+
+
+	function render(err,world,country,data,couList){
+
+		var counterCou=0;
+		
+		world.features.forEach(function(d){
+			var display2push="No";
+			couList.forEach(function(k){
+					if(d.id==k.Country)
+						display2push=k.display
+			})
+			d.properties.display= display2push;
+
+			counterCou++;
+
+			if(counterCou==world.features.length){
+				setData();
+			}	
+		});
+
+
+		function setData(){
+			
+			worldData=world;
+			
+		var counter=0; 
+			psv.parse(data).forEach( function(row){
+					var lat,lng,Cou,disp;
+					country.forEach(function(k){
+						if(row["ISO"]==k.ISO3){
+							lat=k.lat;lng=k.lng;Cou=k.Country;
+						}
+					})
+					if(row["ISO"]!="OTO" && row["ISO"]!="OXE" && row["ISO"]!="ONM" && row["ISO"]!="A5M" && row["ISO"]!="G7M" && row["ISO"]!="OEU")
+						long_data.push({"ISO": row["ISO"], "Country": Cou,"lat":lat,"lng":lng,"date": dateParser(row["Time"]), "value": row["Value"]});
+				
+					counter++;
+
+					if(counter==psv.parse(data).length){
+						renderFilter();
+						renderMap()
+					}
+
+			});
+
+		}
+
+	};	  
+    
+	function renderFilter(){
+		startDate = d3.min(long_data,function(d){return (d.date)});
+		endDate = d3.max(long_data,function(d){return (d.date)});
+
+		/*lowest = d3.min(long_data,function(d){return parseFloat(d.value)});
+		highest = d3.max(long_data,function(d){return parseFloat(d.value)});
+	
+		var max;
+		if(Math.abs(lowest)>=Math.abs(highest))
+			colorScale.domain([-Math.abs(lowest), Math.abs(lowest)])
+		else
+			colorScale.domain([-Math.abs(highest), Math.abs(highest)])	;		*/
+
+		//// DRAW LEGEND
+
+		legend.append("g")
+		.attr("class", "legendOrdinal")
+		.attr("transform", "translate(20,20)");
+
+		var legendOrdinal = d3.legendColor()
+  .labelFormat(d3.format(".0f"))
+    .labels(d3.legendHelpers.thresholdLabels)
+			.shapeWidth(width/20)
+			.orient("horizontal")
+			.scale(colorScale) 
+
+/*
+----legendHelpers.thresholdLabels----
+function legendHelpers.thresholdLabels({
+  i,
+  genLength,
+  generatedLabels,
+  labelDelimiter
+}) {
+  if (i === 0) {
+    const values = generatedLabels[i].split(` ${labelDelimiter} `)
+    return `Less than ${values[1]}`
+  } else if (i === genLength - 1) {
+    const values = generatedLabels[i].split(` ${labelDelimiter} `)
+    return `${values[0]} or more`
+  }
+  return generatedLabels[i]
+}*/
+
+
+
+		legend.select(".legendOrdinal")
+		.call(legendOrdinal);
+				
+        
+		////////// slider //////////
+
+		 moving = false;
+		 currentValue = 3*margin;
+		 targetValue = width-4*margin;
+
+		 playButton = d3.select("#play-button");
+		 
+		x = d3.scaleTime()
+			.domain([startDate, endDate])
+			.range([margin, targetValue])
+			.clamp(true);
+
+		/*	slider.attr("class", "slider")
+	    	.attr("id","slider")
+			.attr("transform", "translate(" + margin+ "," + heightSlider + ")");*/
+
+		slider.append("line")
+			.attr("class", "track")
+			.attr("x1", x.range()[0])
+			.attr("x2", x.range()[1])
+		.select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
+			.attr("class", "track-inset")
+		.select(function() { return this.parentNode.appendChild(this.cloneNode(true)); })
+			.attr("class", "track-overlay")
+			.call(d3.drag()
+				.on("start.interrupt", function() { slider.interrupt(); })
+				.on("start drag", function() {
+				currentValue = d3.event.x;
+				updateMap(x.invert(currentValue)); 
+				})
+			);
+
+		slider.insert("g", ".track-overlay")
+			.attr("class", "ticks")
+			.attr("transform", "translate(0," + 18 + ")")
+		.selectAll("text")
+			.data(x.ticks(10))
+			.enter()
+			.append("text")
+			.attr("x", x)
+			.attr("y", 10)
+			.attr("text-anchor", "middle")
+			.text(function(d) { return formatDate(d); }); // could move to formatDateIntoYear(d) once the period covered as extended. 
+
+		 handle = slider.insert("circle", ".track-overlay")
+			.attr("class", "handle")
+			.attr("r", 9);
+
+		 label = slider.append("text")  
+			.attr("class", "label")
+			.attr("text-anchor", "middle")
+			.text(formatDate(startDate))
+			.attr("transform", "translate(0," + (-25) + ")")
+
+}
+ 
+	function renderMap(){
+
+		worldMap
+	    	.attr("id","world")
+	    	.selectAll("path")
+	        .data(worldData.features)
+	      	.enter().append("path")
+			.attr("class", function (k) {
+				return "world ";
+			})
+			.attr("id", function (k) {
+				return k.id;
+			})
+			.attr('fill', function(d){
+				if(d.properties.display=="Yes")
+				 	return "#c6ccce";
+				else
+					return "#c6ccce";
+					
+			})
+			.attr("stroke-width","1px")
+			.attr('stroke', function(d){
+				if(d.properties.display=="Yes")
+				 	return "#c6ccce";
+				else
+					return "#c6ccce";
+			})
+			.attr("d", path)
+			
+			
+		//var startDate = d3.min(long_data,function(d){return (d.date)});
+
+		/*polygonData=long_data
+		polygons = voronoi(polygonData.filter(function(k){ return formatDate((k.date))==formatDate(startDate)})).polygons();
+		voronoiLayer.selectAll(".cell")
+			.data(polygons)
+			.enter()
+			.append("path")
+			.attr("class", "cell")
+			.attr("fill", "none")
+			.style("pointer-events", "all")
+			.attr("stroke", "none")
+			.attr("d", function (d) { return "M" + d.join("L") + "Z"; })
+			.on('mouseover', function (d) {
+					d3.select("#" + d.data.ISO).style("opacity",0.3)
+					d3.select("#" + d.data.ISO).style("stroke","#171717")
+					d3.select("#" + d.data.ISO).style("stroke-width","2px")
+					divMap.transition()
+						.duration(0)
+						.style("opacity", 1);
+					
+					var htmlText = "<b>" + d.data.Country + "</b><br/><i>"+formatDate(d.data.date)+"</i><br/>consumer Barometer: <b>"+d.data.value+"</b>";
+					divMap.html(htmlText)
+						.style("left", event.pageX - document.body.scrollLeft + "px")
+						.style("top", event.pageY  + "px");
+			})
+			.on("mousemove", function (d) {
+
+				divMap
+					.style("left", event.pageX - document.body.scrollLeft + 10 + "px")
+					.style("top", event.pageY + "px");
+			})
+			.on('mouseout', function (d) {
+				
+				d3.select("#" + d.data.ISO).style("stroke",function(){
+					var basecolor="#c0c7c9";
+						if(d.data.value!="")
+							basecolor = colorScale(parseFloat(d.data.value))
+						if(d.data.value=="") 
+							basecolor ="#868b8c";
+						return basecolor;
+					})
+				d3.select("#" + d.data.ISO).style("opacity",1)
+				
+				divMap.transition()
+					.duration(100)
+					.style("opacity", 0);
+			})*/
+
+		updateMap(startDate)
+
+	}
+
+	function updateMap(value){
+		// update position and text of label according to slider scale
+		handle.attr("cx", x(value));
+		label
+			.attr("x", x(value))
+			.text(formatDate(value));
+console.log(long_data.some(item => formatDate((item.date))===formatDate(value)))
+if(long_data.some(item => formatDate((item.date))===formatDate(value))){
+
+
+		// update map 	
+		worldMap
+			.selectAll("path")
+			.data(worldData.features)
+			.transition().duration(250)
+			.attr("class", function (k) {
+				return "world ";
+			})
+			.attr("id", function (k) {
+				return k.id;
+			})
+			
+			.style('stroke', function(d){
+					var basecolor;
+					
+					if(d.properties.display=="Yes")
+						basecolor= "#c6ccce";
+					else
+						basecolor=  "#c6ccce"; 
+
+					long_data.forEach(function(k){
+
+						if(k.ISO== d.id && formatDate((k.date))==formatDate(value)){
+							if(d.value!="")
+								basecolor =colorScale(parseFloat(k.value))
+							
+						}
+					})
+				return basecolor;
+				})
+			.attr('fill', function (d) {
+				
+				var basecolor;
+				
+				if(d.properties.display=="Yes")
+				 	basecolor= "#c6ccce";
+				else
+					basecolor=  "#c6ccce"; 
+
+				long_data.forEach(function(k){
+						if(k.ISO== d.id && formatDate((k.date))==formatDate(value)){
+							if(d.value!="")
+								basecolor =colorScale(parseFloat(k.value))
+						}
+					})
+				return basecolor;
+			})
+}		
+	/*polygons = voronoi(polygonData.filter(function(k){ return formatDate((k.date))==formatDate(value)})).polygons();
+	
+	voronoiLayer.selectAll(".cell").remove()
+
+	voronoiLayer.selectAll(".cell")
+			.data(polygons)
+			.enter()
+			.append("path")
+			.attr("class", "cell")
+			.attr("fill", "none")
+			.style("pointer-events", "all")
+			.attr("stroke", "none")
+			.attr("d", function (d) { return "M" + d.join("L") + "Z"; })
+
+		voronoiLayer.selectAll(".cell")
+				.on('mouseover', function (d) {
+					d3.select("#" + d.data.ISO).style("opacity",0.5)
+					d3.select("#" + d.data.ISO).style("stroke","#171717")
+					d3.select("#" + d.data.ISO).style("stroke-width","2px")
+						divMap.transition()
+							.duration(100)
+							.style("opacity", 1);
+						
+						var htmlText = "<b>" + d.data.Country + "</b><br/><i>"+formatDate(d.data.date)+"</i><br/>consumer Barometer: <b>"+d.data.value+"</b>";
+					divMap.html(htmlText)
+							.style("left", event.pageX - document.body.scrollLeft + "px")
+							.style("top", event.pageY  + "px");
+							
+					
+
+					})
+				
+				.on("mousemove", function (d) {
+
+					divMap
+						.style("left", event.pageX - document.body.scrollLeft + 10 + "px")
+						.style("top", event.pageY + "px");
+
+				})
+				.on('mouseout', function (d) {
+					d3.select("#" + d.data.ISO).style("stroke",function(){
+					var basecolor="#c0c7c9";
+						if(d.data.value!="")
+							basecolor = colorScale(parseFloat(d.data.value))
+						if(d.data.value=="") 
+							basecolor ="#868b8c";
+						return basecolor;
+					})
+					d3.select("#" + d.data.ISO).style("opacity",1)
+					
+					divMap.transition()
+						.duration(100)
+						.style("opacity", 0);
+				})*/
+		
+}
+
+
+
+
+
+function resize() {
+		// adjust things when the window size changes
+		width = document.getElementById("aboutMap").offsetWidth,
+			height = width * mapRatio;
+
+		if (width > 750)
+			mapScale = 6.7;
+		else
+			mapScale = 6.3
+		// update projection
+		projection
+			.translate([width / 2, 6 * height / 10])
+			.scale(width / mapScale);
+
+		// resize the map container
+		svg.attr('width', width + 'px')
+			.attr('height', height + 'px');
+
+		// resize the map
+		worldMap.selectAll('.world').attr('d', path);
+		//world.selectAll('.state').attr('d', path);
+
+
+
+		voronoi
+			.extent([[-1, -1], [width + 1, height + 1]]);
+
+		polygons = voronoi(polygonData).polygons();
+
+		voronoiLayer.selectAll(".cell")
+			.data(polygons)
+			.attr("fill", "none")
+			.style("pointer-events", "all")
+			.attr("stroke", "none")
+			.attr("d", function (d) { return "M" + d.join("L") + "Z"; })
+	}
+
+
+//d3.select(window).on('resize', resize);
+
+playButton
+    .on("click", function() {
+		var button = d3.select(this);
+		if (button.text() == "Pause") {
+		moving = false;
+		clearInterval(timer);
+		// timer = 0;
+		button.text("Play");
+		} else {
+		moving = true;
+		timer = setInterval(step, 100);
+		button.text("Pause");
+		}
+  })
+
+  
+function step() {
+  updateMap(x.invert(currentValue));
+  currentValue = currentValue + (15);
+  if (currentValue > targetValue) {
+	  updateMap(endDate)
+    moving = false;
+    currentValue = 0;
+    clearInterval(timer);
+    // timer = 0;
+    playButton.text("Play");
+	
+  }
+}	
+
+
+
+d3.selectAll(".button.grey")
+	.on("click", function () {
+		d3.selectAll(".button.grey")
+			.style("background-color", "#ffffff").style("color","#0b1e2d")
+		d3.select(this)
+			.style("background-color", "#04629a").style("color", "#ffffff")
+	})
+
+</script>
+
